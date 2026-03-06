@@ -1,13 +1,13 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Query } from '@nestjs/common';
 import { IsEnum, IsObject, IsOptional, IsString, IsUrl, MinLength } from 'class-validator';
 import { ok } from '../common/api-response';
 import { resolveOrgId, resolveUserId } from '../common/org-context';
-import { ToolType } from '../common/enums';
+import { LegacyToolType, ToolType } from '../common/enums';
 import { ConnectionsService } from './connections.service';
 
 class CreateConnectionDto {
   @IsString() @MinLength(1) name!: string;
-  @IsEnum(ToolType) toolType!: ToolType;
+  @IsEnum({ ...ToolType, ...LegacyToolType }) toolType!: ToolType | LegacyToolType;
   @IsUrl() baseUrl!: string;
   @IsOptional() @IsUrl() secondaryBaseUrl?: string;
   @IsString() @MinLength(1) authType!: string;
@@ -16,12 +16,21 @@ class CreateConnectionDto {
   @IsOptional() @IsObject() metadataJson?: Record<string, unknown>;
 }
 
+class CreateWorkflowConfigDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsString() @MinLength(1) requirementsSourceConnectionId!: string;
+  @IsString() @MinLength(1) testManagementTargetConnectionId!: string;
+}
+
 @Controller('connections')
 export class ConnectionsController {
   constructor(private readonly service: ConnectionsService) {}
 
   @Get()
-  list(@Headers() headers: Record<string, unknown>) { return ok(this.service.list(resolveOrgId(headers))); }
+  list(@Headers() headers: Record<string, unknown>, @Query('toolType') toolType?: ToolType) {
+    const orgId = resolveOrgId(headers);
+    return ok(toolType ? this.service.listByTool(orgId, toolType) : this.service.list(orgId));
+  }
 
   @Post()
   create(@Headers() headers: Record<string, unknown>, @Body() body: CreateConnectionDto) {
@@ -38,6 +47,16 @@ export class ConnectionsController {
 
   @Post(':id/validate')
   async validate(@Headers() headers: Record<string, unknown>, @Param('id') id: string) { return ok(await this.service.validate(resolveOrgId(headers), id)); }
+
+  @Post('workflow-configs')
+  saveWorkflowConfig(@Headers() headers: Record<string, unknown>, @Body() body: CreateWorkflowConfigDto) {
+    return ok(this.service.saveWorkflowConfig(resolveOrgId(headers), resolveUserId(headers), body));
+  }
+
+  @Get('workflow-configs/list')
+  listWorkflowConfigs(@Headers() headers: Record<string, unknown>) {
+    return ok(this.service.listWorkflowConfigs(resolveOrgId(headers)));
+  }
 
   @Delete(':id')
   remove(@Headers() headers: Record<string, unknown>, @Param('id') id: string) { return ok(this.service.remove(resolveOrgId(headers), id)); }

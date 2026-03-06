@@ -30,6 +30,7 @@ export class InMemoryStore {
   pushItems: any[] = [];
   links: any[] = [];
   audits: any[] = [];
+  workflowConfigs: any[] = [];
 
   createBatch(payload: any) {
     const row = { id: `batch_${Date.now()}`, status: GenerationStatus.GENERATED, ...payload, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
