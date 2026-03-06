@@ -39,11 +39,13 @@ export class MockIntegrationProvider
       }
     ];
   }
-  async pushTestCases(payload: { cases: any[] }) {
-    return payload.cases.map((c, i) => ({
+  async pushTestCases(payload: { connectionId: string; cases: any[] }) {
+    const { connectionId, cases } = payload;
+    return cases.map((c, i) => ({
       testCaseId: `ZEPHYR-TC-${1000 + i}`,
       storyKey: c.requirementKey,
-      status: 'SUCCESS'
+      status: 'SUCCESS',
+      connectionId
     }));
   }
 }
