@@ -37,6 +37,12 @@ export class ConnectionsService {
     return this.mask(row);
   }
 
+
+  async validateInput(input: { toolType: ToolType; baseUrl: string; secondaryBaseUrl?: string; username?: string; secret: string; metadataJson?: Record<string, unknown> }) {
+    const connector = this.factory.resolve(input.toolType);
+    return connector.validateConnection({ toolType: input.toolType, baseUrl: input.baseUrl, secondaryBaseUrl: input.secondaryBaseUrl, username: input.username, secret: input.secret, metadataJson: input.metadataJson });
+  }
+
   async validate(orgId: string, id: string) {
     const row = this.store.connections.find((x) => x.id === id && x.organizationId === orgId);
     if (!row) throw new NotFoundException('Connection not found');

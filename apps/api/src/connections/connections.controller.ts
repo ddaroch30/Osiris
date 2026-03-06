@@ -31,6 +31,11 @@ export class ConnectionsController {
   @Get(':id')
   get(@Headers() headers: Record<string, unknown>, @Param('id') id: string) { return ok(this.service.get(resolveOrgId(headers), id)); }
 
+  @Post('validate')
+  async validateInput(@Body() body: CreateConnectionDto) {
+    return ok(await this.service.validateInput(body));
+  }
+
   @Post(':id/validate')
   async validate(@Headers() headers: Record<string, unknown>, @Param('id') id: string) { return ok(await this.service.validate(resolveOrgId(headers), id)); }
 
