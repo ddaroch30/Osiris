@@ -1,18 +1,18 @@
 import { Body, Controller, Delete, Get, Headers, Param, Post } from '@nestjs/common';
-import { IsEnum, IsObject, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsEnum, IsObject, IsOptional, IsString, IsUrl, MinLength } from 'class-validator';
 import { ok } from '../common/api-response';
 import { resolveOrgId, resolveUserId } from '../common/org-context';
 import { ToolType } from '../common/enums';
 import { ConnectionsService } from './connections.service';
 
 class CreateConnectionDto {
-  @IsString() name!: string;
+  @IsString() @MinLength(1) name!: string;
   @IsEnum(ToolType) toolType!: ToolType;
   @IsUrl() baseUrl!: string;
   @IsOptional() @IsUrl() secondaryBaseUrl?: string;
-  @IsString() authType!: string;
+  @IsString() @MinLength(1) authType!: string;
   @IsOptional() @IsString() username?: string;
-  @IsString() secret!: string;
+  @IsString() @MinLength(1) secret!: string;
   @IsOptional() @IsObject() metadataJson?: Record<string, unknown>;
 }
 

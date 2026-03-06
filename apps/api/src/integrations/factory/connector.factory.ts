@@ -10,6 +10,8 @@ import { DemoConnector } from '../connectors/demo/demo.connector';
 export class ConnectorFactory {
   private readonly byType: Record<string, TestManagementConnector> = {
     [ToolType.JIRA_ZEPHYR]: new JiraZephyrConnector(),
+    [ToolType.JIRA_CLOUD]: new JiraZephyrConnector(),
+    [ToolType.ZEPHYR_SCALE]: new JiraZephyrConnector(),
     [ToolType.AZURE_DEVOPS]: new AzureDevOpsConnector(),
     [ToolType.QTEST]: new QTestConnector(),
     [ToolType.DEMO]: new DemoConnector()
