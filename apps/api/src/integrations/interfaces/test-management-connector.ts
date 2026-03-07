@@ -11,7 +11,12 @@ export type ConnectorContext = {
 
 export type ValidateConnectionInput = ConnectorContext;
 
-export type ConnectionValidationResult = { success: boolean; message: string };
+export type ConnectionValidationResult = {
+  success: boolean;
+  message: string;
+  projectCount?: number;
+  projectKeys?: string[];
+};
 
 export type ProjectDto = { id: string; externalId: string; key: string; name: string; description?: string; sourceType: ToolType };
 export type ReleaseContextDto = {

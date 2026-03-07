@@ -16,10 +16,61 @@ import {
 
 const authHeader = (ctx: ConnectorContext) => ({ Authorization: `Bearer ${ctx.secret}`, Accept: 'application/json' });
 
+const stripTrailingSlashes = (value: string): string => value.trim().replace(/\/+$/, '');
+
+const buildProjectsUrl = (baseUrl: string): string => {
+  const normalized = stripTrailingSlashes(baseUrl);
+  if (normalized.toLowerCase().endsWith('/projects')) {
+    return normalized;
+  }
+
+  return `${normalized}/projects`;
+};
+
+type ZephyrProjectsResponse = {
+  values?: Array<{ key?: string }>;
+  isLast?: boolean;
+};
+
 export class ZephyrEssentialConnector implements TestManagementConnector {
   async validateConnection(input: ValidateConnectionInput): Promise<ConnectionValidationResult> {
-    const res = await fetch(`${input.baseUrl}/connect/public/rest/api/1.0/util/versionBoard`, { headers: { ...authHeader(input) } });
-    return { success: res.ok, message: res.ok ? 'Zephyr Essential connection validated.' : `Zephyr Essential validation failed (${res.status})` };
+    const requestUrl = buildProjectsUrl(input.baseUrl);
+    const res = await fetch(requestUrl, { method: 'GET', headers: { ...authHeader(input) } });
+
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+
+    const parsed = (body ?? {}) as ZephyrProjectsResponse;
+    const projectKeys = (parsed.values ?? []).map((project) => project.key).filter((key): key is string => typeof key === 'string' && key.length > 0);
+    const projectCount = parsed.values?.length ?? 0;
+
+    console.debug('[ZephyrEssentialConnector.validateConnection]', {
+      requestUrl,
+      status: res.status,
+      responseSummary: {
+        hasValuesArray: Array.isArray(parsed.values),
+        projectCount,
+        sampleProjectKeys: projectKeys.slice(0, 5)
+      }
+    });
+
+    if (res.status === 200 && Array.isArray(parsed.values)) {
+      return {
+        success: true,
+        message: 'Zephyr Essential connection validated.',
+        projectCount,
+        projectKeys
+      };
+    }
+
+    return {
+      success: false,
+      message: `Zephyr Essential validation failed (${res.status})`
+    };
   }
 
   async listProjects(connection: ConnectorContext): Promise<ProjectDto[]> {
