@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { ConnectionStatus, ToolType } from '../common/enums';
 import { InMemoryStore } from '../common/in-memory-store';
 import { ConnectorFactory } from '../integrations/factory/connector.factory';
@@ -18,10 +17,18 @@ type ConnectionInput = {
 
 @Injectable()
 export class ConnectionsService {
-  private readonly prisma: Pick<PrismaService, 'clientConnection'>;
+  private readonly prisma: {
+    clientConnection: {
+      findMany: PrismaService['clientConnection']['findMany'];
+      findFirst: PrismaService['clientConnection']['findFirst'];
+      create: PrismaService['clientConnection']['create'];
+      update: PrismaService['clientConnection']['update'];
+      deleteMany: PrismaService['clientConnection']['deleteMany'];
+    };
+  };
 
   constructor(private readonly store: InMemoryStore, private readonly factory: ConnectorFactory, prismaService: PrismaService) {
-    this.prisma = prismaService;
+    this.prisma = prismaService as unknown as ConnectionsService['prisma'];
   }
 
   private mapToolType(toolType: ToolType): ToolType {
@@ -118,7 +125,7 @@ export class ConnectionsService {
         maskedSecretPreview: `****${input.secret.slice(-4)}`,
         status: ConnectionStatus.DRAFT,
         lastValidatedAt: null,
-        metadataJson: input.metadataJson as Prisma.InputJsonValue | undefined,
+        ...(input.metadataJson ? { metadataJson: input.metadataJson } : {}),
         createdById: userId
       }
     });

@@ -15,11 +15,34 @@ import {
 } from '../../interfaces/test-management-connector';
 
 const authHeader = (ctx: ConnectorContext) => ({ Authorization: `Basic ${Buffer.from(`${ctx.username ?? ''}:${ctx.secret}`).toString('base64')}` });
+const normalizeBaseUrl = (baseUrl: string) => baseUrl.trim().replace(/\/+$/, '');
 
 export class JiraConnector implements TestManagementConnector {
   async validateConnection(input: ValidateConnectionInput): Promise<ConnectionValidationResult> {
-    const res = await fetch(`${input.baseUrl}/rest/api/3/myself`, { headers: { ...authHeader(input), Accept: 'application/json' } });
-    return { success: res.ok, message: res.ok ? 'Jira connection validated.' : `Jira validation failed (${res.status})` };
+    const requestUrl = `${normalizeBaseUrl(input.baseUrl)}/rest/api/3/project`;
+    const res = await fetch(requestUrl, { method: 'GET', headers: { ...authHeader(input), Accept: 'application/json' } });
+
+    let projectCount: number | undefined;
+    try {
+      const body = await res.json() as unknown;
+      if (Array.isArray(body)) {
+        projectCount = body.length;
+      }
+    } catch {
+      projectCount = undefined;
+    }
+
+    console.debug('[JiraConnector.validateConnection]', {
+      requestUrl,
+      authMode: 'BASIC',
+      status: res.status
+    });
+
+    return {
+      success: res.status === 200,
+      message: res.status === 200 ? 'Jira validation succeeded' : `Jira validation failed (${res.status})`,
+      projectCount
+    };
   }
 
   async listProjects(connection: ConnectorContext): Promise<ProjectDto[]> {
