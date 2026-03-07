@@ -12,7 +12,7 @@ export class TestPushService {
     const execution = { id: `push_${Date.now()}`, organizationId: orgId, connectionId: body.connectionId, batchId: body.batchId, initiatedById: userId, status: PushStatus.PENDING, startedAt: new Date().toISOString(), createdAt: new Date().toISOString() };
     this.store.pushes.push(execution);
     const approved = this.store.testCases.filter((x) => x.batchId === body.batchId && x.status === ReviewStatus.APPROVED);
-    const conn = this.connections.getInternal(orgId, body.connectionId);
+    const conn = await this.connections.getInternal(orgId, body.connectionId);
     const connector = this.factory.resolve(conn.toolType as ToolType);
     const created = await connector.createTestCases({ toolType: conn.toolType, baseUrl: conn.baseUrl, secondaryBaseUrl: conn.secondaryBaseUrl, username: conn.username, secret: conn.secret, metadataJson: conn.metadataJson }, approved.map((c) => ({ sourceRequirementExternalId: c.sourceRequirementExternalId, sourceRequirementKey: c.sourceRequirementKey, title: c.title, preconditions: c.preconditions, steps: c.stepsJson ?? c.steps ?? [], expectedResult: c.expectedResult, priority: c.priority })));
     const links = await connector.linkTestCasesToRequirements({ toolType: conn.toolType, baseUrl: conn.baseUrl, secondaryBaseUrl: conn.secondaryBaseUrl, username: conn.username, secret: conn.secret, metadataJson: conn.metadataJson }, created.filter((c) => c.success && c.externalTestCaseId).map((c) => ({ requirementExternalId: c.sourceRequirementExternalId, testCaseExternalId: c.externalTestCaseId! })));

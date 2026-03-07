@@ -27,18 +27,18 @@ export class ConnectionsController {
   constructor(private readonly service: ConnectionsService) {}
 
   @Get()
-  list(@Headers() headers: Record<string, unknown>, @Query('toolType') toolType?: ToolType) {
+  async list(@Headers() headers: Record<string, unknown>, @Query('toolType') toolType?: ToolType) {
     const orgId = resolveOrgId(headers);
-    return ok(toolType ? this.service.listByTool(orgId, toolType) : this.service.list(orgId));
+    return ok(toolType ? await this.service.listByTool(orgId, toolType) : await this.service.list(orgId));
   }
 
   @Post()
-  create(@Headers() headers: Record<string, unknown>, @Body() body: CreateConnectionDto) {
-    return ok(this.service.create(resolveOrgId(headers), resolveUserId(headers), body));
+  async create(@Headers() headers: Record<string, unknown>, @Body() body: CreateConnectionDto) {
+    return ok(await this.service.create(resolveOrgId(headers), resolveUserId(headers), body));
   }
 
   @Get(':id')
-  get(@Headers() headers: Record<string, unknown>, @Param('id') id: string) { return ok(this.service.get(resolveOrgId(headers), id)); }
+  async get(@Headers() headers: Record<string, unknown>, @Param('id') id: string) { return ok(await this.service.get(resolveOrgId(headers), id)); }
 
   @Post('validate')
   async validateInput(@Body() body: CreateConnectionDto) {
@@ -59,5 +59,5 @@ export class ConnectionsController {
   }
 
   @Delete(':id')
-  remove(@Headers() headers: Record<string, unknown>, @Param('id') id: string) { return ok(this.service.remove(resolveOrgId(headers), id)); }
+  async remove(@Headers() headers: Record<string, unknown>, @Param('id') id: string) { return ok(await this.service.remove(resolveOrgId(headers), id)); }
 }

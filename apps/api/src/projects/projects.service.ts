@@ -7,7 +7,7 @@ import { ConnectorFactory } from '../integrations/factory/connector.factory';
 export class ProjectsService {
   constructor(private readonly connections: ConnectionsService, private readonly factory: ConnectorFactory) {}
   async list(orgId: string, connectionId: string) {
-    const conn = this.connections.getInternal(orgId, connectionId);
+    const conn = await this.connections.getInternal(orgId, connectionId);
     return this.factory.resolve(conn.toolType as ToolType).listProjects({ toolType: conn.toolType, baseUrl: conn.baseUrl, secondaryBaseUrl: conn.secondaryBaseUrl, username: conn.username, secret: conn.secret, metadataJson: conn.metadataJson });
   }
 }
