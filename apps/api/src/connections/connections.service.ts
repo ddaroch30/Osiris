@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ConnectionStatus, ToolType } from '../common/enums';
 import { InMemoryStore } from '../common/in-memory-store';
 import { ConnectorFactory } from '../integrations/factory/connector.factory';
@@ -125,7 +126,11 @@ export class ConnectionsService {
         maskedSecretPreview: `****${input.secret.slice(-4)}`,
         status: ConnectionStatus.DRAFT,
         lastValidatedAt: null,
-        ...(input.metadataJson ? { metadataJson: input.metadataJson } : {}),
+        ...(input.metadataJson
+          ? {
+              metadataJson: input.metadataJson
+            }
+          : {}),
         createdById: userId
       }
     });
