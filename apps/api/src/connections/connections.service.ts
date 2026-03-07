@@ -113,26 +113,31 @@ export class ConnectionsService {
     };
     this.validateInputShape(input);
 
+    const organizationId = orgId;
+    const createdById = userId;
+    const encryptedSecret = Buffer.from(input.secret).toString('base64');
+    const maskedSecretPreview = `****${input.secret.slice(-4)}`;
+
+    const data: Prisma.ClientConnectionCreateInput = {
+      organizationId,
+      name: input.name,
+      toolType: input.toolType as unknown as Prisma.ClientConnectionCreateInput['toolType'],
+      baseUrl: input.baseUrl,
+      secondaryBaseUrl: input.secondaryBaseUrl ?? null,
+      authType: input.authType,
+      username: input.username ?? null,
+      encryptedSecret,
+      maskedSecretPreview,
+      status: 'DRAFT',
+      lastValidatedAt: null,
+      createdById,
+      metadataJson: input.metadataJson
+        ? (input.metadataJson as Prisma.InputJsonValue)
+        : undefined
+    };
+
     const row = await this.prisma.clientConnection.create({
-      data: {
-        organizationId: orgId,
-        name: input.name,
-        toolType: input.toolType,
-        baseUrl: input.baseUrl,
-        secondaryBaseUrl: input.secondaryBaseUrl ?? null,
-        authType: input.authType,
-        username: input.username ?? null,
-        encryptedSecret: Buffer.from(input.secret).toString('base64'),
-        maskedSecretPreview: `****${input.secret.slice(-4)}`,
-        status: ConnectionStatus.DRAFT,
-        lastValidatedAt: null,
-        ...(input.metadataJson
-          ? {
-              metadataJson: input.metadataJson
-            }
-          : {}),
-        createdById: userId
-      }
+      data
     });
 
     this.store.audits.push({ id: `audit_${Date.now()}`, organizationId: orgId, actorUserId: userId, action: 'CONNECTION_CREATED', entityType: 'ClientConnection', entityId: row.id, createdAt: new Date().toISOString() });
