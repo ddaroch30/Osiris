@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ConnectionStatus, LegacyToolType, ToolType } from '../common/enums';
+import { ConnectionStatus, ToolType } from '../common/enums';
 import { InMemoryStore } from '../common/in-memory-store';
 import { ConnectorFactory } from '../integrations/factory/connector.factory';
 
 type ConnectionInput = {
   name: string;
-  toolType: ToolType | LegacyToolType;
+  toolType: ToolType;
   baseUrl: string;
   secondaryBaseUrl?: string;
   authType: string;
@@ -18,11 +18,8 @@ type ConnectionInput = {
 export class ConnectionsService {
   constructor(private readonly store: InMemoryStore, private readonly factory: ConnectorFactory) {}
 
-  private mapToolType(toolType: ToolType | LegacyToolType): ToolType {
-    if (toolType === LegacyToolType.JIRA_CLOUD) return ToolType.JIRA;
-    if (toolType === LegacyToolType.JIRA_ZEPHYR) return ToolType.JIRA;
-    if (toolType === LegacyToolType.ZEPHYR_SCALE || toolType === LegacyToolType.ZEPHYR_SQUAD) return ToolType.ZEPHYR_ESSENTIAL;
-    return toolType as ToolType;
+  private mapToolType(toolType: ToolType): ToolType {
+    return toolType;
   }
 
   private normalizeBaseUrl(baseUrl: string): string {

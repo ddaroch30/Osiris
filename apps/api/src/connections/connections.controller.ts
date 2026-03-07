@@ -2,12 +2,12 @@ import { Body, Controller, Delete, Get, Headers, Param, Post, Query } from '@nes
 import { IsEnum, IsObject, IsOptional, IsString, IsUrl, MinLength } from 'class-validator';
 import { ok } from '../common/api-response';
 import { resolveOrgId, resolveUserId } from '../common/org-context';
-import { LegacyToolType, ToolType } from '../common/enums';
+import { ToolType } from '../common/enums';
 import { ConnectionsService } from './connections.service';
 
 class CreateConnectionDto {
   @IsString() @MinLength(1) name!: string;
-  @IsEnum({ ...ToolType, ...LegacyToolType }) toolType!: ToolType | LegacyToolType;
+  @IsEnum(ToolType) toolType!: ToolType;
   @IsUrl() baseUrl!: string;
   @IsOptional() @IsUrl() secondaryBaseUrl?: string;
   @IsString() @MinLength(1) authType!: string;

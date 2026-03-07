@@ -6,12 +6,6 @@ export enum ToolType {
   DEMO = 'DEMO'
 }
 
-export enum LegacyToolType {
-  JIRA_CLOUD = 'JIRA_CLOUD',
-  JIRA_ZEPHYR = 'JIRA_ZEPHYR',
-  ZEPHYR_SCALE = 'ZEPHYR_SCALE',
-  ZEPHYR_SQUAD = 'ZEPHYR_SQUAD'
-}
 
 export enum ConnectionStatus {
   DRAFT = 'DRAFT',
