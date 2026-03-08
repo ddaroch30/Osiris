@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { ProjectsService } from '../projects/projects.service';
 import { ToolType } from '../common/enums';
 
@@ -10,7 +11,26 @@ export class WorkspacesService {
   constructor(private readonly prisma: PrismaService, private readonly projects: ProjectsService) {}
 
   async list(organizationId: string) {
-    return this.prisma.workspace.findMany({ where: { organizationId }, orderBy: { createdAt: 'desc' } });
+    console.log('[WorkspacesService.list] loading workspaces', { organizationId });
+
+    try {
+      const rows = await this.prisma.workspace.findMany({ where: { organizationId }, orderBy: { createdAt: 'desc' } });
+      console.log('[WorkspacesService.list] loaded workspaces', { organizationId, count: rows.length });
+      return rows;
+    } catch (error) {
+      console.error('[WorkspacesService.list] workspace query failed', {
+        organizationId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+
+      const knownError = error instanceof PrismaClientKnownRequestError ? error : null;
+      if (knownError?.code === 'P2021') {
+        console.warn('[WorkspacesService.list] Workspace table missing in database, returning empty list as temporary fallback');
+        return [];
+      }
+
+      throw error;
+    }
   }
 
   async get(organizationId: string, id: string) {

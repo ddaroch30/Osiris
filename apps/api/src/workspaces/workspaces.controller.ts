@@ -27,7 +27,20 @@ export class WorkspacesController {
 
   @Get()
   async list(@Headers() headers: Record<string, unknown>) {
-    return ok(await this.service.list(resolveOrgId(headers)));
+    const organizationId = resolveOrgId(headers);
+    console.log('[WorkspacesController.list] request received', { organizationId });
+
+    try {
+      const data = await this.service.list(organizationId);
+      console.log('[WorkspacesController.list] request completed', { organizationId, count: data.length });
+      return ok(data);
+    } catch (error) {
+      console.error('[WorkspacesController.list] request failed', {
+        organizationId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
   }
 
   @Post()
