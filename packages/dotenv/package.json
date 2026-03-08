@@ -1,0 +1,6 @@
+{
+  "name": "dotenv",
+  "version": "16.4.7",
+  "main": "index.js",
+  "types": "index.d.ts"
+}
