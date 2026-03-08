@@ -49,6 +49,12 @@ enum ScenarioType {
   ALTERNATE
 }
 
+enum WorkspaceStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
 model ClientConnection {
   id                  String   @id @default(cuid())
   organizationId      String
@@ -72,6 +78,24 @@ model ClientConnection {
   traceabilityLinks   TraceabilityLink[]
 
   @@index([organizationId, toolType])
+  @@index([organizationId, status])
+}
+
+model Workspace {
+  id                        String          @id @default(cuid())
+  organizationId            String
+  name                      String
+  jiraConnectionId          String
+  targetConnectionId        String
+  projectKey                String
+  planningContextType       String
+  planningContextExternalId String
+  planningContextName       String
+  status                    WorkspaceStatus @default(DRAFT)
+  lastSyncedAt              DateTime?
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+
   @@index([organizationId, status])
 }
 

@@ -4,11 +4,9 @@ import Link from 'next/link';
 const nav = [
   ['Dashboard', '/dashboard'],
   ['Connections', '/connections'],
-  ['Projects', '/projects'],
-  ['Release Contexts', '/release-contexts'],
+  ['Workspaces', '/workspaces'],
   ['Requirements', '/requirements'],
-  ['Generate', '/generate'],
-  ['Review Workspace', '/workspace'],
+  ['Test Design', '/workspace'],
   ['Push Executions', '/push-executions'],
   ['Activity Log', '/audit']
 ];

@@ -15,6 +15,7 @@ import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
 import { CommonModule } from './common/common.module';
+import { WorkspacesModule } from './workspaces/workspaces.module';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { CommonModule } from './common/common.module';
     TestPushModule,
     AuditModule,
     NotificationsModule,
-    HealthModule
+    HealthModule,
+    WorkspacesModule
   ]
 })
 export class AppModule {}
