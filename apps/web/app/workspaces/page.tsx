@@ -20,25 +20,54 @@ type Workspace = {
 export default function WorkspacesPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [form, setForm] = useState({ name: '', jiraConnectionId: '', targetConnectionId: '', projectKey: '' });
 
   const jiraConnections = useMemo(() => connections.filter((c) => c.toolType === 'JIRA'), [connections]);
-  const targetConnections = useMemo(() => connections.filter((c) => c.toolType !== 'JIRA'), [connections]);
+  const targetConnections = useMemo(() => connections.filter((c) => c.toolType === 'ZEPHYR_ESSENTIAL'), [connections]);
 
   const load = async () => {
-    const [cRes, wRes] = await Promise.all([fetch(`${API_BASE}/connections`), fetch(`${API_BASE}/workspaces`)]);
-    const cJson = await cRes.json();
-    const wJson = await wRes.json();
-    setConnections(cJson?.data ?? []);
-    setWorkspaces(wJson?.data ?? []);
+    setLoading(true);
+    setLoadError('');
+
+    try {
+      const [cRes, wRes] = await Promise.all([
+        fetch(`${API_BASE}/connections`, { method: 'GET', cache: 'no-store' }),
+        fetch(`${API_BASE}/workspaces`, { method: 'GET', cache: 'no-store' })
+      ]);
+
+      const [cJson, wJson] = await Promise.all([cRes.json(), wRes.json()]);
+
+      if (!cRes.ok) {
+        throw new Error(cJson?.error?.message ?? 'Failed to load saved connections.');
+      }
+      if (!wRes.ok) {
+        throw new Error(wJson?.error?.message ?? 'Failed to load workspaces.');
+      }
+
+      const loadedConnections = (cJson?.data ?? []) as Connection[];
+      const loadedWorkspaces = (wJson?.data ?? []) as Workspace[];
+
+      setConnections(loadedConnections);
+      setWorkspaces(loadedWorkspaces);
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'Failed to load workspace data.';
+      setLoadError(text);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
     setMessage('');
+
     const res = await fetch(`${API_BASE}/workspaces`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -84,6 +113,10 @@ export default function WorkspacesPage() {
             {targetConnections.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.toolType})</option>)}
           </select>
         </div>
+        {loading ? <p className="text-xs text-slate-500">Loading connections and workspaces...</p> : null}
+        {!loading && !jiraConnections.length ? <p className="text-xs text-amber-700">No Jira connections found yet.</p> : null}
+        {!loading && !targetConnections.length ? <p className="text-xs text-amber-700">No Zephyr Essential target connections found yet.</p> : null}
+        {loadError ? <p className="text-xs text-rose-700">{loadError}</p> : null}
         <button className="px-4 py-2 rounded bg-blue-800 text-white">Create Workspace</button>
       </form>
 
@@ -101,7 +134,7 @@ export default function WorkspacesPage() {
                 <td><button className="px-2 py-1 rounded bg-slate-900 text-white" onClick={() => void onSync(w.id)}>Sync Requirements</button></td>
               </tr>
             ))}
-            {!workspaces.length ? <tr className="border-t"><td className="p-3 text-slate-500" colSpan={6}>No workspaces yet.</td></tr> : null}
+            {!workspaces.length ? <tr className="border-t"><td className="p-3 text-slate-500" colSpan={6}>{loading ? 'Loading workspaces...' : 'No workspaces yet.'}</td></tr> : null}
           </tbody>
         </table>
       </div>
