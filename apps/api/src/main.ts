@@ -1,7 +1,13 @@
+import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+
+loadEnv({ path: '.env' });
+loadEnv({ path: '../.env' });
+loadEnv({ path: '../../.env' });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
