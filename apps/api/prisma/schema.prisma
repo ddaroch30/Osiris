@@ -55,6 +55,12 @@ enum WorkspaceStatus {
   ARCHIVED
 }
 
+enum PlanningContextType {
+  SPRINT
+  RELEASE
+  BACKLOG
+}
+
 model ClientConnection {
   id                  String   @id @default(cuid())
   organizationId      String
@@ -76,6 +82,8 @@ model ClientConnection {
   batches             GeneratedTestCaseBatch[]
   pushExecutions      PushExecution[]
   traceabilityLinks   TraceabilityLink[]
+  jiraWorkspaces      Workspace[] @relation("WorkspaceJiraConnection")
+  targetWorkspaces    Workspace[] @relation("WorkspaceTargetConnection")
 
   @@index([organizationId, toolType])
   @@index([organizationId, status])
@@ -88,15 +96,21 @@ model Workspace {
   jiraConnectionId          String
   targetConnectionId        String
   projectKey                String
-  planningContextType       String
+  planningContextType       PlanningContextType
   planningContextExternalId String
   planningContextName       String
   status                    WorkspaceStatus @default(DRAFT)
   lastSyncedAt              DateTime?
+
+  jiraConnection            ClientConnection @relation("WorkspaceJiraConnection", fields: [jiraConnectionId], references: [id], onDelete: Cascade)
+  targetConnection          ClientConnection @relation("WorkspaceTargetConnection", fields: [targetConnectionId], references: [id], onDelete: Cascade)
+
   createdAt                 DateTime        @default(now())
   updatedAt                 DateTime        @updatedAt
 
   @@index([organizationId, status])
+  @@index([jiraConnectionId])
+  @@index([targetConnectionId])
 }
 
 model ExternalProjectCache {
