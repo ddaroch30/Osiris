@@ -35,6 +35,9 @@ type JiraIssueSearchResponse = {
   }>;
 };
 
+type JiraBoard = { id: number; name?: string };
+type JiraSprint = { id: number; state?: string; name?: string; startDate?: string; endDate?: string };
+
 @Injectable()
 export class ProjectsService {
   constructor(private readonly connections: ConnectionsService, private readonly factory: ConnectorFactory) {}
@@ -45,6 +48,60 @@ export class ProjectsService {
 
   private normalizeBaseUrl(baseUrl: string) {
     return baseUrl.trim().replace(/\/+$/, '');
+  }
+
+  private async resolveActiveSprint(baseUrl: string, headers: Record<string, string>, projectKey: string) {
+    const boardCandidates: JiraBoard[] = [];
+
+    const scopedBoardsRes = await fetch(`${baseUrl}/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}&maxResults=50`, { headers });
+    if (scopedBoardsRes.ok) {
+      const scopedBoardsJson = await scopedBoardsRes.json() as { values?: JiraBoard[] };
+      boardCandidates.push(...(scopedBoardsJson.values ?? []));
+    }
+
+    if (!boardCandidates.length) {
+      const genericBoardsRes = await fetch(`${baseUrl}/rest/agile/1.0/board?type=scrum&maxResults=50`, { headers });
+      if (genericBoardsRes.ok) {
+        const genericBoardsJson = await genericBoardsRes.json() as { values?: JiraBoard[] };
+        boardCandidates.push(...(genericBoardsJson.values ?? []));
+      }
+    }
+
+    const seen = new Set<number>();
+    const boards = boardCandidates.filter((board) => {
+      if (seen.has(board.id)) return false;
+      seen.add(board.id);
+      return true;
+    });
+
+    console.log('[ProjectsService.resolveActiveSprint] checking boards for active sprint', {
+      projectKey,
+      boardCount: boards.length,
+      boardIds: boards.map((b) => b.id)
+    });
+
+    for (const board of boards) {
+      const sprintRes = await fetch(`${baseUrl}/rest/agile/1.0/board/${board.id}/sprint?state=active&maxResults=20`, { headers });
+      if (!sprintRes.ok) {
+        console.log('[ProjectsService.resolveActiveSprint] board sprint fetch failed', { boardId: board.id, status: sprintRes.status });
+        continue;
+      }
+
+      const sprintJson = await sprintRes.json() as { values?: JiraSprint[] };
+      const active = (sprintJson.values ?? []).find((sprint) => (sprint.state ?? '').toLowerCase() === 'active');
+
+      if (active) {
+        console.log('[ProjectsService.resolveActiveSprint] active sprint resolved', {
+          projectKey,
+          boardId: board.id,
+          sprintId: active.id,
+          sprintName: active.name
+        });
+        return { boardId: board.id, sprint: active };
+      }
+    }
+
+    return null;
   }
 
   async list(orgId: string, connectionId: string) {
@@ -62,84 +119,27 @@ export class ProjectsService {
     const headers = this.authHeader(conn.username, conn.secret);
 
     console.log('[ProjectsService.discoverPlanningContext] detecting context', { orgId, connectionId, projectKey });
-    const boardRes = await fetch(`${baseUrl}/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}&maxResults=50`, { headers });
-    if (boardRes.ok) {
-      const boardsJson = await boardRes.json() as { values?: Array<{ id: number; name?: string }> };
-      const boards = boardsJson.values ?? [];
-      console.log('[ProjectsService.discoverPlanningContext] boards resolved', {
+
+    const activeSprintResolution = await this.resolveActiveSprint(baseUrl, headers, projectKey);
+    if (activeSprintResolution?.sprint) {
+      const active = activeSprintResolution.sprint;
+      const context = {
+        type: 'SPRINT' as const,
+        id: String(active.id),
+        name: active.name ?? `Sprint ${active.id}`,
+        state: 'ACTIVE',
+        startDate: active.startDate,
+        endDate: active.endDate
+      };
+
+      console.log('[ProjectsService.discoverPlanningContext] active sprint detected', {
         projectKey,
-        boardCount: boards.length,
-        boardIds: boards.map((b) => b.id)
+        boardId: activeSprintResolution.boardId,
+        activeSprintId: active.id,
+        activeSprintName: active.name,
+        context
       });
-
-      const activeSprints: Array<{ boardId: number; id: number; name?: string; startDate?: string; endDate?: string }> = [];
-      const latestSprints: Array<{ boardId: number; id: number; name?: string; startDate?: string; endDate?: string }> = [];
-
-      for (const board of boards) {
-        const sprintRes = await fetch(`${baseUrl}/rest/agile/1.0/board/${board.id}/sprint?state=active,future,closed&maxResults=50`, { headers });
-        if (!sprintRes.ok) {
-          console.log('[ProjectsService.discoverPlanningContext] board sprint fetch failed', { boardId: board.id, status: sprintRes.status });
-          continue;
-        }
-
-        const sprintJson = await sprintRes.json() as {
-          values?: Array<{ id: number; state?: string; name?: string; startDate?: string; endDate?: string }>;
-        };
-
-        for (const sprint of sprintJson.values ?? []) {
-          const state = (sprint.state ?? '').toLowerCase();
-          if (state === 'active') {
-            activeSprints.push({ ...sprint, boardId: board.id });
-          } else if (state === 'future' || state === 'closed') {
-            latestSprints.push({ ...sprint, boardId: board.id });
-          }
-        }
-      }
-
-      if (activeSprints.length) {
-        const active = activeSprints[0];
-        const context = {
-          type: 'SPRINT' as const,
-          id: String(active.id),
-          name: active.name ?? `Sprint ${active.id}`,
-          state: 'ACTIVE',
-          startDate: active.startDate,
-          endDate: active.endDate
-        };
-        console.log('[ProjectsService.discoverPlanningContext] active sprint detected', {
-          boardId: active.boardId,
-          activeSprintId: active.id,
-          activeSprintName: active.name,
-          context
-        });
-        return context;
-      }
-
-      if (latestSprints.length) {
-        const latestSprint = [...latestSprints].sort((a, b) => {
-          const aTs = Date.parse(a.endDate ?? a.startDate ?? '1970-01-01T00:00:00Z');
-          const bTs = Date.parse(b.endDate ?? b.startDate ?? '1970-01-01T00:00:00Z');
-          return bTs - aTs;
-        })[0] ?? latestSprints[0];
-
-        const context = {
-          type: 'SPRINT' as const,
-          id: String(latestSprint.id),
-          name: latestSprint.name ?? `Sprint ${latestSprint.id}`,
-          state: 'LATEST',
-          startDate: latestSprint.startDate,
-          endDate: latestSprint.endDate
-        };
-        console.log('[ProjectsService.discoverPlanningContext] latest sprint detected', {
-          boardId: latestSprint.boardId,
-          latestSprintId: latestSprint.id,
-          latestSprintName: latestSprint.name,
-          context
-        });
-        return context;
-      }
-    } else {
-      console.log('[ProjectsService.discoverPlanningContext] board lookup failed', { status: boardRes.status, projectKey });
+      return context;
     }
 
     const versionsRes = await fetch(`${baseUrl}/rest/api/3/project/${encodeURIComponent(projectKey)}/versions`, { headers });
@@ -187,10 +187,19 @@ export class ProjectsService {
 
     console.log('[ProjectsService.listStories] fetching stories', { orgId, connectionId, projectKey, contextType, contextId });
 
-    if (contextType === 'SPRINT' && contextId) {
-      const sprintIssuesRes = await fetch(`${baseUrl}/rest/agile/1.0/sprint/${encodeURIComponent(contextId)}/issue?maxResults=100`, { headers });
+    let sprintId = contextType === 'SPRINT' ? contextId : undefined;
+    let boardId: number | undefined;
+
+    if (!sprintId) {
+      const activeSprintResolution = await this.resolveActiveSprint(baseUrl, headers, projectKey);
+      sprintId = activeSprintResolution?.sprint ? String(activeSprintResolution.sprint.id) : undefined;
+      boardId = activeSprintResolution?.boardId;
+    }
+
+    if (sprintId) {
+      const sprintIssuesRes = await fetch(`${baseUrl}/rest/agile/1.0/sprint/${encodeURIComponent(sprintId)}/issue?maxResults=100`, { headers });
       if (!sprintIssuesRes.ok) {
-        console.log('[ProjectsService.listStories] sprint issue fetch failed', { contextId, status: sprintIssuesRes.status });
+        console.log('[ProjectsService.listStories] sprint issue fetch failed', { projectKey, contextType, sprintId, status: sprintIssuesRes.status });
         return [];
       }
 
@@ -208,7 +217,8 @@ export class ProjectsService {
       console.log('[ProjectsService.listStories] sprint issues fetched', {
         projectKey,
         contextType,
-        sprintId: contextId,
+        boardId,
+        activeSprintId: sprintId,
         rawIssueCount: issues.length,
         distinctIssueTypes: issueTypes,
         mappedCount: stories.length
@@ -229,7 +239,7 @@ export class ProjectsService {
         }
       }
 
-      jql = `project = ${projectKey} AND fixVersion = "${releaseName.replace(/"/g, '\"')}" ORDER BY updated DESC`;
+      jql = `project = ${projectKey} AND fixVersion = "${releaseName.replace(/"/g, '\\"')}" ORDER BY updated DESC`;
     }
 
     const searchRes = await fetch(`${baseUrl}/rest/api/3/search?jql=${encodeURIComponent(jql)}&maxResults=100`, { headers });
@@ -258,5 +268,4 @@ export class ProjectsService {
     });
     return stories;
   }
-
 }
