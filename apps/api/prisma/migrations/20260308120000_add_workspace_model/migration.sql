@@ -1,3 +1,12 @@
+-- Create enum used by Workspace status typing.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WorkspaceStatus') THEN
+    CREATE TYPE "WorkspaceStatus" AS ENUM ('DRAFT', 'ACTIVE', 'ARCHIVED');
+  END IF;
+END
+$$;
+
 -- Create enum used by Workspace planning context typing.
 DO $$
 BEGIN
