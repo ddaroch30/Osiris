@@ -1,15 +1,18 @@
 {
   "name": "osiris-enterprise-poc",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "concurrently \"npm --workspace apps/api run start:dev\" \"npm --workspace apps/web run dev\"",
     "build": "npm -ws run build",
     "test": "npm -ws run test",
     "lint": "npm -ws run lint",
-    "db:generate": "npm --workspace apps/api run prisma:generate",
-    "db:migrate": "npm --workspace apps/api run prisma:migrate",
-    "db:seed": "npm --workspace apps/api run seed"
+    "db:generate": "npm --workspace @osiris/api run prisma:generate",
+    "db:migrate": "npm --workspace @osiris/api run prisma:migrate",
+    "db:seed": "npm --workspace @osiris/api run seed"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
