@@ -51,27 +51,77 @@ export class WorkspacesService {
       planningContextName?: string;
     }
   ) {
+    console.log('[WorkspacesService.create] creating workspace', {
+      organizationId,
+      name: input.name,
+      jiraConnectionId: input.jiraConnectionId,
+      targetConnectionId: input.targetConnectionId,
+      projectKey: input.projectKey
+    });
+
     if (!input.name || !input.jiraConnectionId || !input.targetConnectionId || !input.projectKey) {
       throw new BadRequestException('name, jiraConnectionId, targetConnectionId and projectKey are required');
+    }
+
+    const [jiraConnection, targetConnection] = await Promise.all([
+      this.prisma.clientConnection.findFirst({ where: { id: input.jiraConnectionId, organizationId } }),
+      this.prisma.clientConnection.findFirst({ where: { id: input.targetConnectionId, organizationId } })
+    ]);
+
+    if (!jiraConnection) {
+      throw new BadRequestException('jiraConnectionId does not map to an existing connection in this organization.');
+    }
+
+    if (jiraConnection.toolType !== ToolType.JIRA) {
+      throw new BadRequestException('jiraConnectionId must reference a Jira connection.');
+    }
+
+    if (!targetConnection) {
+      throw new BadRequestException('targetConnectionId does not map to an existing connection in this organization.');
     }
 
     const planning = input.planningContextType && input.planningContextExternalId && input.planningContextName
       ? { type: input.planningContextType, id: input.planningContextExternalId, name: input.planningContextName }
       : await this.projects.discoverPlanningContext(organizationId, input.jiraConnectionId, input.projectKey);
 
-    return this.prisma.workspace.create({
-      data: {
+    if (!planning.id || !planning.name) {
+      throw new BadRequestException('Unable to determine planning context for this workspace.');
+    }
+
+    try {
+      const row = await this.prisma.workspace.create({
+        data: {
+          organizationId,
+          name: input.name,
+          jiraConnectionId: input.jiraConnectionId,
+          targetConnectionId: input.targetConnectionId,
+          projectKey: input.projectKey,
+          planningContextType: planning.type,
+          planningContextExternalId: planning.id,
+          planningContextName: planning.name,
+          status: 'ACTIVE'
+        }
+      });
+
+      console.log('[WorkspacesService.create] workspace created', { organizationId, workspaceId: row.id });
+      return row;
+    } catch (error) {
+      console.error('[WorkspacesService.create] workspace create failed', {
         organizationId,
-        name: input.name,
-        jiraConnectionId: input.jiraConnectionId,
-        targetConnectionId: input.targetConnectionId,
-        projectKey: input.projectKey,
-        planningContextType: planning.type,
-        planningContextExternalId: planning.id,
-        planningContextName: planning.name,
-        status: 'ACTIVE'
+        error: error instanceof Error ? error.message : String(error)
+      });
+
+      const knownError = error instanceof PrismaClientKnownRequestError ? error : null;
+      if (knownError?.code === 'P2003') {
+        throw new BadRequestException('Invalid connection IDs supplied for workspace creation.');
       }
-    });
+
+      if (knownError?.code === 'P2021') {
+        throw new BadRequestException('Workspace table is missing. Run Prisma migrations and retry.');
+      }
+
+      throw error;
+    }
   }
 
   async selectPlanningContext(

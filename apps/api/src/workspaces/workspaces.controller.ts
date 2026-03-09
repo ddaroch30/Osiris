@@ -45,7 +45,26 @@ export class WorkspacesController {
 
   @Post()
   async create(@Headers() headers: Record<string, unknown>, @Body() body: CreateWorkspaceDto) {
-    return ok(await this.service.create(resolveOrgId(headers), body));
+    const organizationId = resolveOrgId(headers);
+    console.log('[WorkspacesController.create] request received', {
+      organizationId,
+      name: body.name,
+      jiraConnectionId: body.jiraConnectionId,
+      targetConnectionId: body.targetConnectionId,
+      projectKey: body.projectKey
+    });
+
+    try {
+      const data = await this.service.create(organizationId, body);
+      console.log('[WorkspacesController.create] request completed', { organizationId, workspaceId: data.id });
+      return ok(data);
+    } catch (error) {
+      console.error('[WorkspacesController.create] request failed', {
+        organizationId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
   }
 
   @Get(':id')
