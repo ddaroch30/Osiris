@@ -143,11 +143,44 @@ export class WorkspacesService {
 
   async syncRequirements(organizationId: string, workspaceId: string) {
     const workspace = await this.get(organizationId, workspaceId);
+    const detectedContext = await this.projects.discoverPlanningContext(organizationId, workspace.jiraConnectionId, workspace.projectKey);
+
+    if (
+      workspace.planningContextType !== detectedContext.type ||
+      workspace.planningContextExternalId !== detectedContext.id ||
+      workspace.planningContextName !== detectedContext.name
+    ) {
+      console.log('[WorkspacesService.syncRequirements] updating workspace context from Jira', {
+        workspaceId,
+        from: {
+          type: workspace.planningContextType,
+          id: workspace.planningContextExternalId,
+          name: workspace.planningContextName
+        },
+        to: detectedContext
+      });
+
+      await this.prisma.workspace.update({
+        where: { id: workspace.id },
+        data: {
+          planningContextType: detectedContext.type,
+          planningContextExternalId: detectedContext.id,
+          planningContextName: detectedContext.name
+        }
+      });
+
+      workspace.planningContextType = detectedContext.type;
+      workspace.planningContextExternalId = detectedContext.id;
+      workspace.planningContextName = detectedContext.name;
+    }
+
     const contextType = workspace.planningContextType as PlanningContextType;
 
     console.log('[WorkspacesService.syncRequirements] starting sync', {
       organizationId,
       workspaceId,
+      workspaceContextType: workspace.planningContextType,
+      workspaceContextName: workspace.planningContextName,
       projectKey: workspace.projectKey,
       contextType,
       contextId: workspace.planningContextExternalId
@@ -232,12 +265,14 @@ export class WorkspacesService {
   async listRequirements(organizationId: string, workspaceId: string) {
     await this.get(organizationId, workspaceId);
     console.log('[WorkspacesService.listRequirements] loading persisted requirements', { organizationId, workspaceId });
-    return this.prisma.externalRequirementCache.findMany({
+    const rows = await this.prisma.externalRequirementCache.findMany({
       where: {
         organizationId,
         workspaceId
       },
       orderBy: { syncedAt: 'desc' }
     });
+    console.log('[WorkspacesService.listRequirements] read-back completed', { organizationId, workspaceId, readBackCount: rows.length });
+    return rows;
   }
 }

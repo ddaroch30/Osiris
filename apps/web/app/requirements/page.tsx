@@ -35,8 +35,13 @@ export default function RequirementsPage() {
     if (!workspaceId) return;
     const res = await fetch(`${API_BASE}/workspaces/${workspaceId}/sync-requirements`, { method: 'POST' });
     const json = await res.json();
-    setMessage(`Synced ${json?.data?.syncedCount ?? 0} requirements.`);
-    await loadRequirements(workspaceId);
+    if (res.ok) {
+      setMessage(`Synced ${json?.data?.syncedCount ?? 0} requirements.`);
+      await loadRequirements(workspaceId);
+      return;
+    }
+
+    setMessage(json?.error?.message ?? 'Sync failed');
   };
 
   return (
