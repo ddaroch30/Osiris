@@ -151,6 +151,7 @@ model ExternalRequirementCache {
   id             String   @id @default(cuid())
   organizationId String
   connectionId   String
+  workspaceId    String
   projectExternalId String
   releaseContextExternalId String?
   externalId     String
@@ -164,9 +165,10 @@ model ExternalRequirementCache {
   rawMetadata    Json?
   syncedAt       DateTime @default(now())
 
-  @@index([organizationId, connectionId, projectExternalId])
+  @@index([organizationId, workspaceId, connectionId, projectExternalId])
+  @@index([workspaceId])
   @@index([releaseContextExternalId])
-  @@unique([connectionId, externalId])
+  @@unique([connectionId, externalId, workspaceId])
 }
 
 model GeneratedTestCaseBatch {

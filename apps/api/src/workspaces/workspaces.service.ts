@@ -145,6 +145,14 @@ export class WorkspacesService {
     const workspace = await this.get(organizationId, workspaceId);
     const contextType = workspace.planningContextType as PlanningContextType;
 
+    console.log('[WorkspacesService.syncRequirements] starting sync', {
+      organizationId,
+      workspaceId,
+      projectKey: workspace.projectKey,
+      contextType,
+      contextId: workspace.planningContextExternalId
+    });
+
     const stories = await this.projects.listStories(
       organizationId,
       workspace.jiraConnectionId,
@@ -153,17 +161,28 @@ export class WorkspacesService {
       workspace.planningContextExternalId
     );
 
+    console.log('[WorkspacesService.syncRequirements] stories fetched', {
+      organizationId,
+      workspaceId,
+      contextType,
+      fetchedCount: stories.length
+    });
+
+    let savedCount = 0;
+
     for (const story of stories) {
       await this.prisma.externalRequirementCache.upsert({
         where: {
-          connectionId_externalId: {
+          connectionId_externalId_workspaceId: {
             connectionId: workspace.jiraConnectionId,
-            externalId: story.id
+            externalId: story.id,
+            workspaceId
           }
         },
         create: {
           organizationId,
           connectionId: workspace.jiraConnectionId,
+          workspaceId,
           projectExternalId: workspace.projectKey,
           releaseContextExternalId: contextType === 'BACKLOG' ? null : workspace.planningContextExternalId,
           externalId: story.id,
@@ -192,6 +211,7 @@ export class WorkspacesService {
           syncedAt: new Date()
         }
       });
+      savedCount += 1;
     }
 
     await this.prisma.workspace.update({
@@ -199,16 +219,23 @@ export class WorkspacesService {
       data: { lastSyncedAt: new Date() }
     });
 
-    return { workspaceId, syncedCount: stories.length };
+    console.log('[WorkspacesService.syncRequirements] sync completed', {
+      organizationId,
+      workspaceId,
+      fetchedCount: stories.length,
+      savedCount
+    });
+
+    return { workspaceId, contextType, fetchedCount: stories.length, savedCount, syncedCount: savedCount };
   }
 
   async listRequirements(organizationId: string, workspaceId: string) {
-    const workspace = await this.get(organizationId, workspaceId);
+    await this.get(organizationId, workspaceId);
+    console.log('[WorkspacesService.listRequirements] loading persisted requirements', { organizationId, workspaceId });
     return this.prisma.externalRequirementCache.findMany({
       where: {
         organizationId,
-        connectionId: workspace.jiraConnectionId,
-        projectExternalId: workspace.projectKey
+        workspaceId
       },
       orderBy: { syncedAt: 'desc' }
     });

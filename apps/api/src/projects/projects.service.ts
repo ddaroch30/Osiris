@@ -60,17 +60,17 @@ export class ProjectsService {
     const baseUrl = this.normalizeBaseUrl(conn.baseUrl);
     const headers = this.authHeader(conn.username, conn.secret);
 
+    console.log('[ProjectsService.discoverPlanningContext] detecting context', { orgId, connectionId, projectKey });
     const boardRes = await fetch(`${baseUrl}/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}&maxResults=50`, { headers });
     if (boardRes.ok) {
       const boardsJson = await boardRes.json() as { values?: Array<{ id: number }> };
       const boards = boardsJson.values ?? [];
 
-      const now = Date.now();
       const activeSprints: Array<{ id: number; name?: string; startDate?: string; endDate?: string }> = [];
-      const futureSprints: Array<{ id: number; name?: string; startDate?: string; endDate?: string }> = [];
+      const latestSprints: Array<{ id: number; name?: string; startDate?: string; endDate?: string }> = [];
 
       for (const board of boards) {
-        const sprintRes = await fetch(`${baseUrl}/rest/agile/1.0/board/${board.id}/sprint?state=active,future&maxResults=50`, { headers });
+        const sprintRes = await fetch(`${baseUrl}/rest/agile/1.0/board/${board.id}/sprint?state=active,future,closed&maxResults=50`, { headers });
         if (!sprintRes.ok) continue;
 
         const sprintJson = await sprintRes.json() as {
@@ -81,41 +81,43 @@ export class ProjectsService {
           const state = (sprint.state ?? '').toLowerCase();
           if (state === 'active') {
             activeSprints.push(sprint);
-          } else if (state === 'future') {
-            futureSprints.push(sprint);
+          } else if (state === 'future' || state === 'closed') {
+            latestSprints.push(sprint);
           }
         }
       }
 
       if (activeSprints.length) {
         const active = activeSprints[0];
-        return {
-          type: 'SPRINT',
+        const context = {
+          type: 'SPRINT' as const,
           id: String(active.id),
           name: active.name ?? `Sprint ${active.id}`,
           state: 'ACTIVE',
           startDate: active.startDate,
           endDate: active.endDate
         };
+        console.log('[ProjectsService.discoverPlanningContext] context detected', context);
+        return context;
       }
 
-      if (futureSprints.length) {
-        const nearestFuture = [...futureSprints].sort((a, b) => {
-          const aTs = a.startDate ? Date.parse(a.startDate) : Number.MAX_SAFE_INTEGER;
-          const bTs = b.startDate ? Date.parse(b.startDate) : Number.MAX_SAFE_INTEGER;
-          const aNorm = Number.isFinite(aTs) && aTs >= now ? aTs : Number.MAX_SAFE_INTEGER;
-          const bNorm = Number.isFinite(bTs) && bTs >= now ? bTs : Number.MAX_SAFE_INTEGER;
-          return aNorm - bNorm;
-        })[0] ?? futureSprints[0];
+      if (latestSprints.length) {
+        const latestSprint = [...latestSprints].sort((a, b) => {
+          const aTs = Date.parse(a.endDate ?? a.startDate ?? '1970-01-01T00:00:00Z');
+          const bTs = Date.parse(b.endDate ?? b.startDate ?? '1970-01-01T00:00:00Z');
+          return bTs - aTs;
+        })[0] ?? latestSprints[0];
 
-        return {
-          type: 'SPRINT',
-          id: String(nearestFuture.id),
-          name: nearestFuture.name ?? `Sprint ${nearestFuture.id}`,
-          state: 'FUTURE',
-          startDate: nearestFuture.startDate,
-          endDate: nearestFuture.endDate
+        const context = {
+          type: 'SPRINT' as const,
+          id: String(latestSprint.id),
+          name: latestSprint.name ?? `Sprint ${latestSprint.id}`,
+          state: 'LATEST',
+          startDate: latestSprint.startDate,
+          endDate: latestSprint.endDate
         };
+        console.log('[ProjectsService.discoverPlanningContext] context detected', context);
+        return context;
       }
     }
 
@@ -130,23 +132,27 @@ export class ProjectsService {
           return bTs - aTs;
         })[0];
 
-        return {
-          type: 'RELEASE',
+        const context = {
+          type: 'RELEASE' as const,
           id: String(latest.id),
           name: latest.name ?? `Version ${latest.id}`,
           state: 'UNRELEASED',
           startDate: latest.startDate,
           endDate: latest.releaseDate
         };
+        console.log('[ProjectsService.discoverPlanningContext] context detected', context);
+        return context;
       }
     }
 
-    return {
-      type: 'BACKLOG',
+    const context = {
+      type: 'BACKLOG' as const,
       id: projectKey,
       name: `${projectKey} Backlog`,
       state: 'OPEN'
     };
+    console.log('[ProjectsService.discoverPlanningContext] context detected', context);
+    return context;
   }
 
   async listStories(orgId: string, connectionId: string, projectKey: string, contextType: PlanningContextType, contextId?: string): Promise<StoryDto[]> {
@@ -158,20 +164,38 @@ export class ProjectsService {
     const baseUrl = this.normalizeBaseUrl(conn.baseUrl);
     const headers = this.authHeader(conn.username, conn.secret);
 
+    console.log('[ProjectsService.listStories] fetching stories', { orgId, connectionId, projectKey, contextType, contextId });
+
     if (contextType === 'SPRINT' && contextId) {
       const sprintIssuesRes = await fetch(`${baseUrl}/rest/agile/1.0/sprint/${encodeURIComponent(contextId)}/issue?maxResults=100&jql=${encodeURIComponent('issuetype in (Story)')}`, { headers });
       if (!sprintIssuesRes.ok) return [];
       const json = await sprintIssuesRes.json() as JiraIssueSearchResponse;
-      return (json.issues ?? []).map((issue) => ({ id: issue.id, key: issue.key, title: issue.fields?.summary ?? issue.key, status: issue.fields?.status?.name, priority: issue.fields?.priority?.name }));
+      const stories = (json.issues ?? []).map((issue) => ({ id: issue.id, key: issue.key, title: issue.fields?.summary ?? issue.key, status: issue.fields?.status?.name, priority: issue.fields?.priority?.name }));
+      console.log('[ProjectsService.listStories] fetched stories', { projectKey, contextType, count: stories.length });
+      return stories;
     }
 
-    const jql = contextType === 'RELEASE' && contextId
-      ? `project = ${projectKey} AND fixVersion = ${contextId} AND issuetype in (Story) ORDER BY updated DESC`
-      : `project = ${projectKey} AND issuetype in (Story) AND statusCategory != Done ORDER BY updated DESC`;
+    let jql = `project = ${projectKey} AND issuetype in (Story) AND statusCategory != Done ORDER BY updated DESC`;
+
+    if (contextType === 'RELEASE' && contextId) {
+      let releaseName = contextId;
+      const versionsRes = await fetch(`${baseUrl}/rest/api/3/project/${encodeURIComponent(projectKey)}/versions`, { headers });
+      if (versionsRes.ok) {
+        const versions = await versionsRes.json() as Array<{ id: string | number; name?: string }>;
+        const found = versions.find((v) => String(v.id) === String(contextId));
+        if (found?.name) {
+          releaseName = found.name;
+        }
+      }
+
+      jql = `project = ${projectKey} AND issuetype in (Story) AND fixVersion = "${releaseName.replace(/"/g, '\"')}" ORDER BY updated DESC`;
+    }
 
     const searchRes = await fetch(`${baseUrl}/rest/api/3/search?jql=${encodeURIComponent(jql)}&maxResults=100`, { headers });
     if (!searchRes.ok) return [];
     const json = await searchRes.json() as JiraIssueSearchResponse;
-    return (json.issues ?? []).map((issue) => ({ id: issue.id, key: issue.key, title: issue.fields?.summary ?? issue.key, status: issue.fields?.status?.name, priority: issue.fields?.priority?.name }));
+    const stories = (json.issues ?? []).map((issue) => ({ id: issue.id, key: issue.key, title: issue.fields?.summary ?? issue.key, status: issue.fields?.status?.name, priority: issue.fields?.priority?.name }));
+    console.log('[ProjectsService.listStories] fetched stories', { projectKey, contextType, count: stories.length });
+    return stories;
   }
 }

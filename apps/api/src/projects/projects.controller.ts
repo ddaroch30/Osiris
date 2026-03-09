@@ -22,7 +22,11 @@ export class ProjectsController {
       throw new BadRequestException('connectionId is required');
     }
 
-    return ok(await this.service.discoverPlanningContext(resolveOrgId(headers), connectionId, projectKey));
+    const organizationId = resolveOrgId(headers);
+    console.log('[ProjectsController.planningContext] request received', { organizationId, connectionId, projectKey });
+    const data = await this.service.discoverPlanningContext(organizationId, connectionId, projectKey);
+    console.log('[ProjectsController.planningContext] request completed', { organizationId, projectKey, type: data.type, id: data.id });
+    return ok(data);
   }
 
   @Get('projects/:projectKey/stories')
@@ -41,6 +45,10 @@ export class ProjectsController {
       throw new BadRequestException('contextType is required');
     }
 
-    return ok(await this.service.listStories(resolveOrgId(headers), connectionId, projectKey, contextType, contextId));
+    const organizationId = resolveOrgId(headers);
+    console.log('[ProjectsController.stories] request received', { organizationId, connectionId, projectKey, contextType, contextId });
+    const data = await this.service.listStories(organizationId, connectionId, projectKey, contextType, contextId);
+    console.log('[ProjectsController.stories] request completed', { organizationId, projectKey, contextType, count: data.length });
+    return ok(data);
   }
 }

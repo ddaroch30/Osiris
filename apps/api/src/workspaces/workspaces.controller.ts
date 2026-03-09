@@ -79,11 +79,19 @@ export class WorkspacesController {
 
   @Post(':id/sync-requirements')
   async syncRequirements(@Headers() headers: Record<string, unknown>, @Param('id') id: string) {
-    return ok(await this.service.syncRequirements(resolveOrgId(headers), id));
+    const organizationId = resolveOrgId(headers);
+    console.log('[WorkspacesController.syncRequirements] request received', { organizationId, workspaceId: id });
+    const data = await this.service.syncRequirements(organizationId, id);
+    console.log('[WorkspacesController.syncRequirements] request completed', data);
+    return ok(data);
   }
 
   @Get(':id/requirements')
   async requirements(@Headers() headers: Record<string, unknown>, @Param('id') id: string) {
-    return ok(await this.service.listRequirements(resolveOrgId(headers), id));
+    const organizationId = resolveOrgId(headers);
+    console.log('[WorkspacesController.requirements] request received', { organizationId, workspaceId: id });
+    const data = await this.service.listRequirements(organizationId, id);
+    console.log('[WorkspacesController.requirements] request completed', { organizationId, workspaceId: id, count: data.length });
+    return ok(data);
   }
 }
