@@ -1,0 +1,6 @@
+{
+  "name": "@nestjs/config",
+  "version": "3.3.0",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

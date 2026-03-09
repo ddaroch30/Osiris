@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ToolType {
+  JIRA
+  ZEPHYR_ESSENTIAL
+  AZURE_DEVOPS
+  QTEST
+  DEMO
+}
+
+enum ConnectionStatus {
+  DRAFT
+  ACTIVE
+  INVALID
+}
+
+enum GenerationStatus {
+  DRAFT
+  GENERATED
+  REVIEWED
+  PUSHED
+}
+
+enum ReviewStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
+enum PushStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+enum ScenarioType {
+  POSITIVE
+  NEGATIVE
+  EDGE
+  VALIDATION
+  ALTERNATE
+}
+
+enum WorkspaceStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PlanningContextType {
+  SPRINT
+  RELEASE
+  BACKLOG
+}
+
+model ClientConnection {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  name                String
+  toolType            ToolType
+  baseUrl             String
+  secondaryBaseUrl    String?
+  authType            String
+  username            String?
+  encryptedSecret     String
+  maskedSecretPreview String
+  status              ConnectionStatus
+  lastValidatedAt     DateTime?
+  metadataJson        Json?
+  createdById         String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  batches             GeneratedTestCaseBatch[]
+  pushExecutions      PushExecution[]
+  traceabilityLinks   TraceabilityLink[]
+  jiraWorkspaces      Workspace[] @relation("WorkspaceJiraConnection")
+  targetWorkspaces    Workspace[] @relation("WorkspaceTargetConnection")
+
+  @@index([organizationId, toolType])
+  @@index([organizationId, status])
+}
+
+model Workspace {
+  id                        String          @id @default(cuid())
+  organizationId            String
+  name                      String
+  jiraConnectionId          String
+  targetConnectionId        String
+  projectKey                String
+  planningContextType       PlanningContextType
+  planningContextExternalId String
+  planningContextName       String
+  status                    WorkspaceStatus @default(DRAFT)
+  lastSyncedAt              DateTime?
+
+  jiraConnection            ClientConnection @relation("WorkspaceJiraConnection", fields: [jiraConnectionId], references: [id], onDelete: Cascade)
+  targetConnection          ClientConnection @relation("WorkspaceTargetConnection", fields: [targetConnectionId], references: [id], onDelete: Cascade)
+
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+
+  @@index([organizationId, status])
+  @@index([jiraConnectionId])
+  @@index([targetConnectionId])
+}
+
+model ExternalProjectCache {
+  id             String   @id @default(cuid())
+  organizationId String
+  connectionId   String
+  externalId     String
+  externalKey    String
+  name           String
+  description    String?
+  sourceType     ToolType
+  rawJson        Json?
+  syncedAt       DateTime @default(now())
+
+  @@index([organizationId, connectionId])
+  @@unique([connectionId, externalId])
+}
+
+model ExternalReleaseContextCache {
+  id             String   @id @default(cuid())
+  organizationId String
+  connectionId   String
+  projectExternalId String
+  externalId     String
+  name           String
+  type           String
+  status         String?
+  startDate      DateTime?
+  endDate        DateTime?
+  rawJson        Json?
+  syncedAt       DateTime @default(now())
+
+  @@index([organizationId, connectionId, projectExternalId])
+  @@unique([connectionId, projectExternalId, externalId])
+}
+
+model ExternalRequirementCache {
+  id             String   @id @default(cuid())
+  organizationId String
+  connectionId   String
+  workspaceId    String
+  projectExternalId String
+  releaseContextExternalId String?
+  externalId     String
+  externalKey    String
+  title          String
+  description    String?
+  acceptanceCriteria String?
+  priority       String?
+  status         String?
+  sourceType     ToolType
+  rawMetadata    Json?
+  syncedAt       DateTime @default(now())
+
+  @@index([organizationId, workspaceId, connectionId, projectExternalId])
+  @@index([workspaceId])
+  @@index([releaseContextExternalId])
+  @@unique([connectionId, externalId, workspaceId])
+}
+
+model GeneratedTestCaseBatch {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  connectionId             String
+  projectExternalId        String
+  releaseContextExternalId String?
+  createdById              String
+  status                   GenerationStatus
+  generationMode           String
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  connection               ClientConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  testCases                GeneratedTestCase[]
+  pushExecutions           PushExecution[]
+
+  @@index([organizationId, connectionId, createdAt])
+}
+
+model GeneratedTestCase {
+  id                          String   @id @default(cuid())
+  batchId                     String
+  sourceRequirementExternalId String
+  sourceRequirementKey        String
+  sourceRequirementTitle      String
+  title                       String
+  preconditions               String
+  stepsJson                   Json
+  expectedResult              String
+  scenarioType                ScenarioType
+  priority                    String
+  status                      ReviewStatus
+  isManuallyEdited            Boolean @default(false)
+  approvedById                String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  batch                       GeneratedTestCaseBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  pushItems                   PushExecutionItem[]
+  traceabilityLinks           TraceabilityLink[]
+
+  @@index([batchId, status])
+  @@index([sourceRequirementExternalId])
+}
+
+model PushExecution {
+  id             String   @id @default(cuid())
+  organizationId String
+  connectionId   String
+  batchId        String
+  initiatedById  String
+  status         PushStatus
+  summaryJson    Json?
+  startedAt      DateTime
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  connection     ClientConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  batch          GeneratedTestCaseBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  items          PushExecutionItem[]
+
+  @@index([organizationId, connectionId, createdAt])
+}
+
+model PushExecutionItem {
+  id                        String   @id @default(cuid())
+  pushExecutionId           String
+  generatedTestCaseId       String
+  sourceRequirementExternalId String
+  targetExternalTestCaseId  String?
+  targetExternalTestCaseKey String?
+  linkStatus                PushStatus
+  createStatus              PushStatus
+  errorMessage              String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  pushExecution             PushExecution @relation(fields: [pushExecutionId], references: [id], onDelete: Cascade)
+  generatedTestCase         GeneratedTestCase @relation(fields: [generatedTestCaseId], references: [id], onDelete: Cascade)
+
+  @@index([pushExecutionId, createStatus])
+}
+
+model TraceabilityLink {
+  id                          String   @id @default(cuid())
+  organizationId              String
+  connectionId                String
+  sourceRequirementExternalId String
+  sourceRequirementKey        String
+  generatedTestCaseId         String
+  targetExternalTestCaseId    String
+  targetExternalTestCaseKey   String?
+  linkType                    String
+  createdAt                   DateTime @default(now())
+
+  connection                  ClientConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  generatedTestCase           GeneratedTestCase @relation(fields: [generatedTestCaseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, connectionId, createdAt])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorUserId    String?
+  action         String
+  entityType     String
+  entityId       String
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+}
